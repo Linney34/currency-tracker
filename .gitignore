@@ -1,0 +1,59 @@
+# Maven / Target
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Gradle build (на всяк випадок)
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Spring / logs / config
+*.log
+*.tmp
+*.bak
+*.swp
+application.yml
+application.properties
+.env
+*.db
+
+# STS
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# VS Code
+.vscode/
+
+# Eclipse
+.metadata/
+.recommenders/
+*.launch
+.settings/
+
+# Lombok / annotation processing
+*.class
+
+# Others
+.DS_Store
+Thumbs.db

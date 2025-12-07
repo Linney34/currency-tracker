@@ -5,6 +5,7 @@ import com.example.currencytracker.repository.CurrencyRateRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -20,18 +21,31 @@ public class CurrencyService {
     private final CurrencyRateRepository repository;
     private final RestTemplate restTemplate = new RestTemplate();
 
-    private final String API_URL = "https://api.nbp.pl/api/exchangerates/rates/A/";
+    private static final String API_URL = "https://api.nbp.pl/api/exchangerates/rates/a/";
 
+    private static final List<String> CURRENCIES = List.of("USD", "EUR");
 
+    /**
+     * Fetch latest USD and EUR rates vs PLN and save to DB
+     */
     public void fetchLatestRates() {
-        List<String> currencies = List.of("USD", "EUR", "PLN");
         LocalDateTime now = LocalDateTime.now();
 
-        for (String currency : currencies) {
+        for (String currency : CURRENCIES) {
             try {
                 Map<String, Object> response = restTemplate.getForObject(API_URL + currency + "/?format=json", Map.class);
-                Map<String, Object> rateInfo = ((List<Map<String, Object>>) response.get("rates")).get(0);
-                BigDecimal rate = new BigDecimal(rateInfo.get("mid").toString());
+                if (response == null || !response.containsKey("rates")) {
+                    System.err.println("No rates found for " + currency);
+                    continue;
+                }
+
+                List<Map<String, Object>> rates = (List<Map<String, Object>>) response.get("rates");
+                if (rates.isEmpty()) {
+                    System.err.println("Empty rates list for " + currency);
+                    continue;
+                }
+
+                BigDecimal rate = new BigDecimal(rates.get(0).get("mid").toString());
 
                 CurrencyRate currencyRate = CurrencyRate.builder()
                         .currency(currency)
@@ -40,14 +54,15 @@ public class CurrencyService {
                         .build();
 
                 repository.save(currencyRate);
-            } catch (Exception e) {
+
+            } catch (RestClientException e) {
                 System.err.println("Error fetching rate for " + currency + ": " + e.getMessage());
             }
         }
     }
 
     /**
-     * Get latest cached rate
+     * Get latest cached rate for a currency (USD or EUR)
      */
     @Cacheable(value = "latestRate", key = "#currency")
     public CurrencyRate getLatestRate(String currency) {
@@ -55,19 +70,22 @@ public class CurrencyService {
     }
 
     /**
-     * Get rate history
+     * Get currency history from DB
      */
     public List<CurrencyRate> getHistory(String currency, LocalDate from, LocalDate to) {
         return repository.findByCurrencyAndTimestampBetween(currency, from.atStartOfDay(), to.atTime(23, 59, 59));
     }
 
     /**
-     * Get average rate for last N days
+     * Get average rate over last N days
      */
     public BigDecimal getAverage(String currency, int days) {
         LocalDate from = LocalDate.now().minusDays(days);
         LocalDate to = LocalDate.now();
         List<CurrencyRate> rates = getHistory(currency, from, to);
+
+        if (rates.isEmpty()) return BigDecimal.ZERO;
+
         return rates.stream()
                 .map(CurrencyRate::getRate)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
@@ -75,13 +93,18 @@ public class CurrencyService {
     }
 
     /**
-     * Get trend: up / down / stable
+     * Get trend for the last 7 days: up / down / stable
      */
     public String getTrend(String currency) {
-        List<CurrencyRate> rates = repository.findByCurrencyAndTimestampBetween(currency, LocalDateTime.now().minusDays(7), LocalDateTime.now());
+        LocalDateTime from = LocalDateTime.now().minusDays(7);
+        LocalDateTime to = LocalDateTime.now();
+        List<CurrencyRate> rates = repository.findByCurrencyAndTimestampBetween(currency, from, to);
+
         if (rates.size() < 2) return "stable";
+
         BigDecimal first = rates.get(0).getRate();
         BigDecimal last = rates.get(rates.size() - 1).getRate();
+
         int cmp = last.compareTo(first);
         if (cmp > 0) return "up";
         if (cmp < 0) return "down";

@@ -1,3 +1,82 @@
 spring:
-  application:
-    name: currencytracker
+  profiles:
+    active: dev
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/currency_tracker_db
+    username: postgres
+    password: Tt1231232811
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  cache:
+    type: caffeine
+
+scheduler:
+  fetch-interval-cron: "0 0 * * * *" # кожну годину
+
+currency-api:
+  url: https://api.nbp.pl/api/exchangerates/rates
+  currencies:
+    - USD
+    - EUR
+    - PLN
+  retry:
+    attempts: 3
+    delay: 5000 # ms
+
+logging:
+  level:
+    root: INFO
+    com.example.currencytracker: DEBUG
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    url: jdbc:postgresql://postgres:5432/currency_tracker_db
+    username: postgres
+    password: Tt1231232811
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  cache:
+    type: caffeine
+
+scheduler:
+  fetch-interval-cron: "0 0 * * * *" # кожну годину
+
+currency-api:
+  url: https://api.nbp.pl/api/exchangerates/rates
+  currencies:
+    - USD
+    - EUR
+    - PLN
+  retry:
+    attempts: 3
+    delay: 5000 # ms
+
+logging:
+  level:
+    root: INFO
+    com.example.currencytracker: INFO

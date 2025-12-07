@@ -26,17 +26,23 @@ spring:
     type: caffeine
 
 scheduler:
-  fetch-interval-cron: "0 0 * * * *" # кожну годину
+  fetch-interval-cron: "0 0 * * * *"
 
 currency-api:
   url: https://api.nbp.pl/api/exchangerates/rates
   currencies:
     - USD
     - EUR
-    - PLN
+  table: A
   retry:
     attempts: 3
     delay: 5000 # ms
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui/index.html
 
 logging:
   level:
@@ -64,17 +70,23 @@ spring:
     type: caffeine
 
 scheduler:
-  fetch-interval-cron: "0 0 * * * *" # кожну годину
+  fetch-interval-cron: "0 0 * * * *"
 
 currency-api:
   url: https://api.nbp.pl/api/exchangerates/rates
   currencies:
     - USD
     - EUR
-    - PLN
+  table: A
   retry:
     attempts: 3
     delay: 5000 # ms
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui/index.html
 
 logging:
   level:

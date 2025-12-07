@@ -2,23 +2,26 @@ package com.example.currencytracker.service;
 
 import com.example.currencytracker.entity.CurrencyRate;
 import com.example.currencytracker.repository.CurrencyRateRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 @Service
-@RequiredArgsConstructor
 public class CurrencyService {
 
     private final CurrencyRateRepository repository;
+
+    public CurrencyService(CurrencyRateRepository repository) {
+        this.repository = repository;
+    }
     private final RestTemplate restTemplate = new RestTemplate();
 
     private static final String API_URL = "https://api.nbp.pl/api/exchangerates/rates/a/";
@@ -28,6 +31,10 @@ public class CurrencyService {
     /**
      * Fetch latest USD and EUR rates vs PLN and save to DB
      */
+    public void saveRate(CurrencyRate rate) {
+        repository.save(rate);
+    }
+
     public void fetchLatestRates() {
         LocalDateTime now = LocalDateTime.now();
 
@@ -89,7 +96,7 @@ public class CurrencyService {
         return rates.stream()
                 .map(CurrencyRate::getRate)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .divide(BigDecimal.valueOf(rates.size()), 4, BigDecimal.ROUND_HALF_UP);
+                .divide(BigDecimal.valueOf(rates.size()), 4, RoundingMode.HALF_UP);
     }
 
     /**
@@ -102,8 +109,8 @@ public class CurrencyService {
 
         if (rates.size() < 2) return "stable";
 
-        BigDecimal first = rates.get(0).getRate();
-        BigDecimal last = rates.get(rates.size() - 1).getRate();
+        BigDecimal first = rates.getFirst().getRate();
+        BigDecimal last = rates.getLast().getRate();
 
         int cmp = last.compareTo(first);
         if (cmp > 0) return "up";

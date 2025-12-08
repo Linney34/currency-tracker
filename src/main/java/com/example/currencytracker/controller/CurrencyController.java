@@ -5,6 +5,7 @@ import com.example.currencytracker.entity.CurrencyRate;
 import com.example.currencytracker.service.CurrencyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,13 +17,10 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/rates")
 @Tag(name = "Currency API", description = "Operations for currency tracking")
+@RequiredArgsConstructor
 public class CurrencyController {
 
     private final CurrencyService service;
-
-    public CurrencyController(CurrencyService service) {
-        this.service = service;
-    }
 
     @GetMapping("/latest")
     @Operation(summary = "Get latest currency rate")

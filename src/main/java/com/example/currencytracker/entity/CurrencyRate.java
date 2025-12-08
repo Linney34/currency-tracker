@@ -2,11 +2,20 @@ package com.example.currencytracker.entity;
 
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "currency_rates")
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
 public class CurrencyRate {
 
     @Id
@@ -22,7 +31,7 @@ public class CurrencyRate {
     @Column(nullable = false)
     private LocalDateTime timestamp;
 
-    public CurrencyRate() {
+/*    public CurrencyRate() {
     }
 
     public CurrencyRate(Long id, String currency, BigDecimal rate, LocalDateTime timestamp) {
@@ -58,5 +67,5 @@ public class CurrencyRate {
         public CurrencyRate build() {
             return new CurrencyRate(id, currency, rate, timestamp);
         }
-    }
+    }*/
 }

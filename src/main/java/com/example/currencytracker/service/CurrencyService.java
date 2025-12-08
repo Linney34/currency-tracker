@@ -2,6 +2,7 @@ package com.example.currencytracker.service;
 
 import com.example.currencytracker.entity.CurrencyRate;
 import com.example.currencytracker.repository.CurrencyRateRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
@@ -15,16 +16,11 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+@RequiredArgsConstructor
 public class CurrencyService {
 
     private final CurrencyRateRepository repository;
     private final RestTemplate restTemplate;
-
-    public CurrencyService(CurrencyRateRepository repository, RestTemplate restTemplate) {
-        this.repository = repository;
-        this.restTemplate = restTemplate;
-    }
-
 
     private static final String API_URL = "https://api.nbp.pl/api/exchangerates/rates/a/";
 

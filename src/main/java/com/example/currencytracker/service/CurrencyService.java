@@ -18,11 +18,13 @@ import java.util.Map;
 public class CurrencyService {
 
     private final CurrencyRateRepository repository;
+    private final RestTemplate restTemplate;
 
-    public CurrencyService(CurrencyRateRepository repository) {
+    public CurrencyService(CurrencyRateRepository repository, RestTemplate restTemplate) {
         this.repository = repository;
+        this.restTemplate = restTemplate;
     }
-    private final RestTemplate restTemplate = new RestTemplate();
+
 
     private static final String API_URL = "https://api.nbp.pl/api/exchangerates/rates/a/";
 

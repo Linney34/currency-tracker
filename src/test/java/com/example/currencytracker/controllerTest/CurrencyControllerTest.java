@@ -41,7 +41,7 @@ class CurrencyControllerTest {
         List<CurrencyRateDTO> result = controller.getHistory("EUR", LocalDate.now(), LocalDate.now());
 
         assertEquals(1, result.size());
-        assertEquals("EUR", result.get(0).getCurrency());
+        assertEquals("EUR", result.getFirst().getCurrency());
     }
 
     @Test

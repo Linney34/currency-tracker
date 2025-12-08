@@ -3,7 +3,6 @@ package com.example.currencytracker.schedulerTest;
 import com.example.currencytracker.scheduler.CurrencyScheduler;
 import com.example.currencytracker.service.CurrencyService;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

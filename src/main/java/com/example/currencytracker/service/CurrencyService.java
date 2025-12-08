@@ -54,7 +54,7 @@ public class CurrencyService {
                     continue;
                 }
 
-                BigDecimal rate = new BigDecimal(rates.get(0).get("mid").toString());
+                BigDecimal rate = new BigDecimal(rates.getFirst().get("mid").toString());
 
                 CurrencyRate currencyRate = CurrencyRate.builder()
                         .currency(currency)

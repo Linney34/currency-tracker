@@ -1,118 +1,82 @@
 package com.example.currencytracker.service;
 
-import com.example.currencytracker.entity.CurrencyRate;
-import com.example.currencytracker.repository.CurrencyRateRepository;
+import com.example.currencytracker.dto.CurrencyRateDTO;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
 public class CurrencyService {
 
-    private final CurrencyRateRepository repository;
     private final RestTemplate restTemplate;
 
-    private static final String API_URL = "https://api.nbp.pl/api/exchangerates/rates/a/";
-
-    private static final List<String> CURRENCIES = List.of("USD", "EUR");
+    private static final String BASE_URL = "https://api.frankfurter.app";
 
     /**
-     * Fetch latest USD and EUR rates vs PLN and save to DB
+     * Fetch latest currency rate dynamically
      */
-    public void saveRate(CurrencyRate rate) {
-        repository.save(rate);
-    }
+    public CurrencyRateDTO fetchLatestRate(String currency) {
+        try {
+            String url = BASE_URL + "/latest?from=" + currency + "&to=PLN";
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
 
-    public void fetchLatestRates() {
-        LocalDateTime now = LocalDateTime.now();
-
-        for (String currency : CURRENCIES) {
-            try {
-                Map<String, Object> response = restTemplate.getForObject(API_URL + currency + "/?format=json", Map.class);
-                if (response == null || !response.containsKey("rates")) {
-                    System.err.println("No rates found for " + currency);
-                    continue;
-                }
-
-                List<Map<String, Object>> rates = (List<Map<String, Object>>) response.get("rates");
-                if (rates.isEmpty()) {
-                    System.err.println("Empty rates list for " + currency);
-                    continue;
-                }
-
-                BigDecimal rate = new BigDecimal(rates.getFirst().get("mid").toString());
-
-                CurrencyRate currencyRate = CurrencyRate.builder()
-                        .currency(currency)
-                        .rate(rate)
-                        .timestamp(now)
-                        .build();
-
-                repository.save(currencyRate);
-
-            } catch (RestClientException e) {
-                System.err.println("Error fetching rate for " + currency + ": " + e.getMessage());
+            if (response == null || !response.containsKey("rates")) {
+                throw new RuntimeException("No rates found for " + currency);
             }
+
+            Map<String, Double> rates = (Map<String, Double>) response.get("rates");
+            BigDecimal rate = BigDecimal.valueOf(rates.get("PLN"));
+            String dateStr = (String) response.get("date");
+
+            return CurrencyRateDTO.builder()
+                    .currency(currency)
+                    .rate(rate)
+                    .timestamp(LocalDate.parse(dateStr).atStartOfDay())
+                    .build();
+
+        } catch (RestClientException e) {
+            throw new RuntimeException("Failed to fetch latest rate for " + currency, e);
         }
     }
 
     /**
-     * Get latest cached rate for a currency (USD or EUR)
+     * Fetch historical rates for a period
      */
-    @Cacheable(value = "latestRate", key = "#currency")
-    public CurrencyRate getLatestRate(String currency) {
-        return repository.findTopByCurrencyOrderByTimestampDesc(currency);
-    }
+    public List<CurrencyRateDTO> fetchHistory(String currency, LocalDate from, LocalDate to) {
+        try {
+            String url = BASE_URL + "/" + from + ".." + to + "?from=" + currency + "&to=PLN";
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
 
-    /**
-     * Get currency history from DB
-     */
-    public List<CurrencyRate> getHistory(String currency, LocalDate from, LocalDate to) {
-        return repository.findByCurrencyAndTimestampBetween(currency, from.atStartOfDay(), to.atTime(23, 59, 59));
-    }
+            if (response == null || !response.containsKey("rates")) {
+                throw new RuntimeException("No historical rates found for " + currency);
+            }
 
-    /**
-     * Get average rate over last N days
-     */
-    public BigDecimal getAverage(String currency, int days) {
-        LocalDate from = LocalDate.now().minusDays(days);
-        LocalDate to = LocalDate.now();
-        List<CurrencyRate> rates = getHistory(currency, from, to);
+            Map<String, Map<String, Double>> rates = (Map<String, Map<String, Double>>) response.get("rates");
+            List<CurrencyRateDTO> history = new ArrayList<>();
 
-        if (rates.isEmpty()) return BigDecimal.ZERO;
+            for (Map.Entry<String, Map<String, Double>> entry : rates.entrySet()) {
+                LocalDate date = LocalDate.parse(entry.getKey());
+                BigDecimal rate = BigDecimal.valueOf(entry.getValue().get("PLN"));
 
-        return rates.stream()
-                .map(CurrencyRate::getRate)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .divide(BigDecimal.valueOf(rates.size()), 4, RoundingMode.HALF_UP);
-    }
+                history.add(CurrencyRateDTO.builder()
+                        .currency(currency)
+                        .rate(rate)
+                        .timestamp(date.atStartOfDay())
+                        .build());
+            }
 
-    /**
-     * Get trend for the last 7 days: up / down / stable
-     */
-    public String getTrend(String currency) {
-        LocalDateTime from = LocalDateTime.now().minusDays(7);
-        LocalDateTime to = LocalDateTime.now();
-        List<CurrencyRate> rates = repository.findByCurrencyAndTimestampBetween(currency, from, to);
+            // Sort by date ascending
+            history.sort(Comparator.comparing(CurrencyRateDTO::getTimestamp));
+            return history;
 
-        if (rates.size() < 2) return "stable";
-
-        BigDecimal first = rates.getFirst().getRate();
-        BigDecimal last = rates.getLast().getRate();
-
-        int cmp = last.compareTo(first);
-        if (cmp > 0) return "up";
-        if (cmp < 0) return "down";
-        return "stable";
+        } catch (RestClientException e) {
+            throw new RuntimeException("Failed to fetch history for " + currency, e);
+        }
     }
 }

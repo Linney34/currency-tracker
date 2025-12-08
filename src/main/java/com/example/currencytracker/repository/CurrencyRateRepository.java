@@ -10,7 +10,9 @@ import java.util.List;
 @Repository
 public interface CurrencyRateRepository extends JpaRepository<CurrencyRate, Long> {
 
+    CurrencyRate findTopByCurrencyOrderByTimestampDesc(String currency);
+
     List<CurrencyRate> findByCurrencyAndTimestampBetween(String currency, LocalDateTime from, LocalDateTime to);
 
-    CurrencyRate findTopByCurrencyOrderByTimestampDesc(String currency);
+    boolean existsByCurrencyAndTimestamp(String currency, LocalDateTime timestamp);
 }

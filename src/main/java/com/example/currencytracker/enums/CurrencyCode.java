@@ -1,11 +1,10 @@
 package com.example.currencytracker.enums;
 
 public enum CurrencyCode {
-    USD, EUR, PLN, GBP, CHF, JPY, AUD, CAD, CZK, DKK,
+    USD, EUR, GBP, CHF, JPY, AUD, CAD, CZK, DKK,
     HUF, NOK, SEK, RON, BGN, TRY, CNY, HKD, NZD, SGD,
     ZAR, MXN, BRL, INR, KRW, ILS, IDR, THB, PHP, MYR,
-    ISK, AED, SAR, KWD, QAR, ARS, CLP, COP, NGN, EGP,
-    UAH, MDL, GEL, BAM, RSD;
+    ISK;
 
     public static boolean isValid(String code) {
         try {

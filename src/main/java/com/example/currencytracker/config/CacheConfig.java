@@ -13,14 +13,15 @@ public class CacheConfig {
     @Bean
     public Caffeine<Object, Object> caffeineConfig() {
         return Caffeine.newBuilder()
-                .expireAfterWrite(1, TimeUnit.HOURS) // cache expiry
+                .expireAfterWrite(1, TimeUnit.HOURS)
                 .maximumSize(1000);
     }
 
     @Bean
     public CacheManager cacheManager(Caffeine<Object, Object> caffeine) {
-        CaffeineCacheManager cacheManager = new CaffeineCacheManager("latestRate");
+        CaffeineCacheManager cacheManager = new CaffeineCacheManager();
         cacheManager.setCaffeine(caffeine);
+        cacheManager.setAllowNullValues(false);
         return cacheManager;
     }
 }

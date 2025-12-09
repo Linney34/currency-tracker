@@ -1,17 +1,16 @@
 package com.example.currencytracker.serviceTest;
 
-import com.example.currencytracker.entity.CurrencyRate;
-import com.example.currencytracker.repository.CurrencyRateRepository;
+import com.example.currencytracker.dto.CurrencyRateDTO;
+import com.example.currencytracker.enums.CurrencyCode;
 import com.example.currencytracker.service.CurrencyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.*;
+import org.mockito.ArgumentMatchers;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -19,146 +18,174 @@ import static org.mockito.Mockito.*;
 
 class CurrencyServiceTest {
 
-    @Mock
-    private CurrencyRateRepository repository;
-
-    @InjectMocks
+    private RestTemplate restTemplate;
     private CurrencyService currencyService;
-
-    @Spy
-    private RestTemplate restTemplate = new RestTemplate();
 
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
+        restTemplate = mock(RestTemplate.class);
+        currencyService = new CurrencyService(restTemplate);
     }
 
     @Test
-    void saveRate_savesRate() {
-        CurrencyRate rate = CurrencyRate.builder().currency("USD").rate(BigDecimal.ONE).timestamp(LocalDateTime.now()).build();
-        currencyService.saveRate(rate);
-        verify(repository).save(rate);
+    void fetchDailyRate_success() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("rates", Map.of("PLN", 4.5));
+        response.put("date", "2025-12-09");
+
+        when(restTemplate.getForObject(anyString(), eq(Map.class))).thenReturn(response);
+
+        CurrencyRateDTO dto = currencyService.fetchDailyRate(CurrencyCode.USD);
+
+        assertEquals("USD", dto.getCurrency());
+        assertEquals(BigDecimal.valueOf(4.5), dto.getRate());
+        assertEquals(LocalDate.parse("2025-12-09").atTime(16,0), dto.getTimestamp());
     }
 
     @Test
-    void fetchLatestRates_successfulFetch() {
-        Map<String, Object> rateMap = Map.of("mid", 4.5);
-        Map<String, Object> response = Map.of("rates", List.of(rateMap));
+    void fetchDailyRate_noRates_throwsException() {
+        Map<String, Object> response = new HashMap<>();
+        when(restTemplate.getForObject(anyString(), eq(Map.class))).thenReturn(response);
 
-        doReturn(response).when(restTemplate).getForObject(anyString(), eq(Map.class));
-
-        currencyService.fetchLatestRates();
-
-        verify(repository, times(2)).save(any(CurrencyRate.class));
+        RuntimeException ex = assertThrows(RuntimeException.class, () ->
+                currencyService.fetchDailyRate(CurrencyCode.EUR));
+        assertTrue(ex.getMessage().contains("No rates found"));
     }
 
     @Test
-    void fetchLatestRates_nullResponse() {
-        doReturn(null).when(restTemplate).getForObject(anyString(), eq(Map.class));
-        currencyService.fetchLatestRates(); // should not throw
-        verify(repository, never()).save(any());
+    void fetchDailyRate_restClientException_throwsException() {
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenThrow(new RestClientException("API down"));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () ->
+                currencyService.fetchDailyRate(CurrencyCode.GBP));
+        assertTrue(ex.getMessage().contains("Failed to fetch latest rate"));
     }
 
     @Test
-    void fetchLatestRates_emptyRatesList() {
-        Map<String, Object> response = Map.of("rates", List.of());
-        doReturn(response).when(restTemplate).getForObject(anyString(), eq(Map.class));
-        currencyService.fetchLatestRates();
-        verify(repository, never()).save(any());
+    void fetchHistory_success() {
+        Map<String, Object> response = new HashMap<>();
+        Map<String, Map<String, Double>> ratesMap = new HashMap<>();
+        ratesMap.put("2025-12-01", Map.of("PLN", 4.5));
+        ratesMap.put("2025-12-02", Map.of("PLN", 4.6));
+        response.put("rates", ratesMap);
+
+        when(restTemplate.getForObject(anyString(), eq(Map.class))).thenReturn(response);
+
+        List<CurrencyRateDTO> history = currencyService.fetchHistory(CurrencyCode.USD,
+                LocalDate.parse("2025-12-01"), LocalDate.parse("2025-12-02"));
+
+        assertEquals(2, history.size());
+        assertEquals(BigDecimal.valueOf(4.5), history.get(0).getRate());
+        assertEquals(BigDecimal.valueOf(4.6), history.get(1).getRate());
     }
 
     @Test
-    void fetchLatestRates_exceptionThrown() {
-        doThrow(new RestClientException("boom")).when(restTemplate).getForObject(anyString(), eq(Map.class));
-        currencyService.fetchLatestRates(); // should catch exception
-        verify(repository, never()).save(any());
+    void fetchHistory_noRates_throwsException() {
+        Map<String, Object> response = new HashMap<>();
+        when(restTemplate.getForObject(anyString(), eq(Map.class))).thenReturn(response);
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () ->
+                currencyService.fetchHistory(CurrencyCode.CHF,
+                        LocalDate.now().minusDays(2), LocalDate.now()));
+        assertTrue(ex.getMessage().contains("No historical rates found"));
     }
 
     @Test
-    void getLatestRate_returnsLatestRate() {
-        CurrencyRate rate = CurrencyRate.builder().currency("USD").rate(BigDecimal.TEN).timestamp(LocalDateTime.now()).build();
-        when(repository.findTopByCurrencyOrderByTimestampDesc("USD")).thenReturn(rate);
+    void fetchHistory_restClientException_throwsException() {
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenThrow(new RestClientException("API down"));
 
-        CurrencyRate result = currencyService.getLatestRate("USD");
-        assertEquals(rate, result);
+        RuntimeException ex = assertThrows(RuntimeException.class, () ->
+                currencyService.fetchHistory(CurrencyCode.JPY,
+                        LocalDate.now().minusDays(2), LocalDate.now()));
+        assertTrue(ex.getMessage().contains("Failed to fetch history"));
     }
 
     @Test
-    void getHistory_returnsRatesBetweenDates() {
-        LocalDate from = LocalDate.now().minusDays(5);
-        LocalDate to = LocalDate.now();
-        List<CurrencyRate> rates = List.of(
-                CurrencyRate.builder().currency("USD").rate(BigDecimal.ONE).timestamp(LocalDateTime.now()).build()
-        );
-        when(repository.findByCurrencyAndTimestampBetween(eq("USD"), any(), any())).thenReturn(rates);
+    void getAverageRate_calculatesCorrectly() {
+        CurrencyRateDTO rate1 = CurrencyRateDTO.builder()
+                .currency("USD").rate(BigDecimal.valueOf(4.0)).timestamp(LocalDate.now().atTime(16,0)).build();
+        CurrencyRateDTO rate2 = CurrencyRateDTO.builder()
+                .currency("USD").rate(BigDecimal.valueOf(6.0)).timestamp(LocalDate.now().atTime(16,0)).build();
 
-        List<CurrencyRate> result = currencyService.getHistory("USD", from, to);
-        assertEquals(rates, result);
+        CurrencyService spyService = spy(currencyService);
+        doReturn(Arrays.asList(rate1, rate2)).when(spyService).fetchHistory(any(), any(), any());
+
+        double avg = spyService.getAverageRate(2, CurrencyCode.USD);
+        assertEquals(5.0, avg);
     }
 
     @Test
-    void getAverage_returnsZeroForEmptyRates() {
-        when(repository.findByCurrencyAndTimestampBetween(anyString(), any(), any())).thenReturn(Collections.emptyList());
-        BigDecimal avg = currencyService.getAverage("USD", 5);
-        assertEquals(BigDecimal.ZERO, avg);
+    void getAverageRate_emptyHistory_returnsZero() {
+        CurrencyService spyService = spy(currencyService);
+        doReturn(Collections.emptyList()).when(spyService).fetchHistory(any(), any(), any());
+
+        double avg = spyService.getAverageRate(3, CurrencyCode.EUR);
+        assertEquals(0.0, avg);
     }
 
     @Test
-    void getAverage_returnsCorrectAverage() {
-        List<CurrencyRate> rates = List.of(
-                CurrencyRate.builder().currency("USD").rate(BigDecimal.valueOf(2)).build(),
-                CurrencyRate.builder().currency("USD").rate(BigDecimal.valueOf(4)).build()
-        );
-        when(repository.findByCurrencyAndTimestampBetween(anyString(), any(), any())).thenReturn(rates);
+    void getTrend_up() {
+        CurrencyRateDTO rate1 = CurrencyRateDTO.builder()
+                .currency("USD").rate(BigDecimal.valueOf(4.0)).timestamp(LocalDate.now().atTime(16,0)).build();
+        CurrencyRateDTO rate2 = CurrencyRateDTO.builder()
+                .currency("USD").rate(BigDecimal.valueOf(5.0)).timestamp(LocalDate.now().atTime(16,0)).build();
 
-        BigDecimal avg = currencyService.getAverage("USD", 2);
-        assertEquals(BigDecimal.valueOf(3.0000).setScale(4), avg);
-    }
+        CurrencyService spyService = spy(currencyService);
+        doReturn(Arrays.asList(rate1, rate2)).when(spyService).fetchHistory(any(), any(), any());
 
-    @Test
-    void getTrend_returnsStableForLessThanTwoRates() {
-        List<CurrencyRate> rates = List.of(
-                CurrencyRate.builder().currency("USD").rate(BigDecimal.ONE).build()
-        );
-        when(repository.findByCurrencyAndTimestampBetween(anyString(), any(), any())).thenReturn(rates);
-
-        String trend = currencyService.getTrend("USD");
-        assertEquals("stable", trend);
-    }
-
-    @Test
-    void getTrend_returnsUp() {
-        List<CurrencyRate> rates = new LinkedList<>();
-        rates.add(CurrencyRate.builder().currency("USD").rate(BigDecimal.ONE).build());
-        rates.add(CurrencyRate.builder().currency("USD").rate(BigDecimal.TEN).build());
-
-        when(repository.findByCurrencyAndTimestampBetween(anyString(), any(), any())).thenReturn(rates);
-
-        String trend = currencyService.getTrend("USD");
+        String trend = spyService.getTrend(2, CurrencyCode.USD);
         assertEquals("up", trend);
     }
 
     @Test
-    void getTrend_returnsDown() {
-        List<CurrencyRate> rates = new LinkedList<>();
-        rates.add(CurrencyRate.builder().currency("USD").rate(BigDecimal.TEN).build());
-        rates.add(CurrencyRate.builder().currency("USD").rate(BigDecimal.ONE).build());
+    void getTrend_down() {
+        CurrencyRateDTO rate1 = CurrencyRateDTO.builder()
+                .currency("USD").rate(BigDecimal.valueOf(5.0)).timestamp(LocalDate.now().atTime(16,0)).build();
+        CurrencyRateDTO rate2 = CurrencyRateDTO.builder()
+                .currency("USD").rate(BigDecimal.valueOf(4.0)).timestamp(LocalDate.now().atTime(16,0)).build();
 
-        when(repository.findByCurrencyAndTimestampBetween(anyString(), any(), any())).thenReturn(rates);
+        CurrencyService spyService = spy(currencyService);
+        doReturn(Arrays.asList(rate1, rate2)).when(spyService).fetchHistory(any(), any(), any());
 
-        String trend = currencyService.getTrend("USD");
+        String trend = spyService.getTrend(2, CurrencyCode.USD);
         assertEquals("down", trend);
     }
 
     @Test
-    void getTrend_returnsStableWhenFirstEqualsLast() {
-        List<CurrencyRate> rates = new LinkedList<>();
-        rates.add(CurrencyRate.builder().currency("USD").rate(BigDecimal.TEN).build());
-        rates.add(CurrencyRate.builder().currency("USD").rate(BigDecimal.TEN).build());
+    void getTrend_stable() {
+        CurrencyRateDTO rate1 = CurrencyRateDTO.builder()
+                .currency("USD").rate(BigDecimal.valueOf(4.0)).timestamp(LocalDate.now().atTime(16,0)).build();
+        CurrencyRateDTO rate2 = CurrencyRateDTO.builder()
+                .currency("USD").rate(BigDecimal.valueOf(4.0)).timestamp(LocalDate.now().atTime(16,0)).build();
 
-        when(repository.findByCurrencyAndTimestampBetween(anyString(), any(), any())).thenReturn(rates);
+        CurrencyService spyService = spy(currencyService);
+        doReturn(Arrays.asList(rate1, rate2)).when(spyService).fetchHistory(any(), any(), any());
 
-        String trend = currencyService.getTrend("USD");
+        String trend = spyService.getTrend(2, CurrencyCode.USD);
         assertEquals("stable", trend);
+    }
+
+    @Test
+    void getTrend_notEnoughData_returnsStable() {
+        CurrencyRateDTO rate1 = CurrencyRateDTO.builder()
+                .currency("USD").rate(BigDecimal.valueOf(4.0)).timestamp(LocalDate.now().atTime(16,0)).build();
+
+        CurrencyService spyService = spy(currencyService);
+        doReturn(Collections.singletonList(rate1)).when(spyService).fetchHistory(any(), any(), any());
+
+        String trend = spyService.getTrend(1, CurrencyCode.USD);
+        assertEquals("stable", trend);
+    }
+
+    @Test
+    void getTrend_fetchHistoryThrows_throwsException() {
+        CurrencyService spyService = spy(currencyService);
+        doThrow(new RuntimeException("API down")).when(spyService).fetchHistory(any(), any(), any());
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () ->
+                spyService.getTrend(3, CurrencyCode.USD));
+        assertTrue(ex.getMessage().contains("Failed to fetch history"));
     }
 }
